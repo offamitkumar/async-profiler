@@ -60,6 +60,8 @@ public class Runner {
             return Arch.RISCV64;
         } else if (arch.contains("loongarch64")) {
             return Arch.LOONGARCH64;
+        } else if (arch.contains("s390x")) {
+            return Arch.S390X;
         } else if (arch.endsWith("86")) {
             return Arch.X86;
         }

@@ -120,20 +120,31 @@ ifeq ($(ARCH_TAG),)
   ARCH:=$(shell uname -m)
   ifeq ($(ARCH),x86_64)
     ARCH_TAG=x64
+    RET_INSN=ret
   else ifeq ($(ARCH),aarch64)
     ARCH_TAG=arm64
+    RET_INSN=ret
   else ifeq ($(ARCH),arm64)
     ARCH_TAG=arm64
+    RET_INSN=ret
   else ifeq ($(findstring arm,$(ARCH)),arm)
     ARCH_TAG=arm32
+    RET_INSN=ret
   else ifeq ($(ARCH),ppc64le)
     ARCH_TAG=ppc64le
+    RET_INSN=blr
   else ifeq ($(ARCH),riscv64)
     ARCH_TAG=riscv64
+    RET_INSN=ret
   else ifeq ($(ARCH),loongarch64)
     ARCH_TAG=loongarch64
+    RET_INSN=ret
+  else ifeq ($(ARCH),s390x)
+    ARCH_TAG=s390x
+    RET_INSN=br\ %r14
   else
     ARCH_TAG=x86
+    RET_INSN=ret
   endif
 endif
 
@@ -153,7 +164,7 @@ ni: build/bin build/$(JFRCONV_NI)
 release: $(PACKAGE_NAME).$(PACKAGE_EXT)
 
 $(PACKAGE_NAME).tar.gz: $(PACKAGE_DIR)
-	patchelf --remove-needed ld-linux-x86-64.so.2 --remove-needed ld-linux-aarch64.so.1 $(PACKAGE_DIR)/$(LIB_PROFILER)
+	patchelf --remove-needed ld-linux-x86-64.so.2 --remove-needed ld-linux-aarch64.so.1 --remove-needed ld64.so.1 $(PACKAGE_DIR)/$(LIB_PROFILER)
 	tar czf $@ -C $(PACKAGE_DIR)/.. $(PACKAGE_NAME)
 	rm -r $(PACKAGE_DIR)
 
@@ -203,6 +214,9 @@ ifeq ($(MERGE),true)
 else
 	$(CXX) $(CPPFLAGS) $(CXXFLAGS) $(DEFS) $(INCLUDES) -fPIC -shared -o $@ $(SOURCES) $(LIBS)
 endif
+ifeq ($(ARCH_TAG),s390x)
+	patchelf --remove-needed ld64.so.1 $@
+endif
 
 build/$(ASPROF_HEADER): src/asprof.h
 	mkdir -p build/include
@@ -251,10 +265,10 @@ ifeq ($(OS_TAG),linux)
 	$(CC) -c -shared -fPIC -o $(TEST_LIB_DIR)/vaddrdif.o test/native/libs/vaddrdif.c
 	$(LD) -N -shared -o $(TEST_LIB_DIR)/libvaddrdif.$(SOEXT) $(TEST_LIB_DIR)/vaddrdif.o -T test/native/libs/vaddrdif.ld
 
-	$(AS) -o $(TEST_LIB_DIR)/multiplematching.o test/native/libs/multiplematching.s
+	$(CC) -E -x assembler-with-cpp -DRET_INSN=$(RET_INSN) test/native/libs/multiplematching.s | $(AS) -o $(TEST_LIB_DIR)/multiplematching.o -
 	$(LD) -shared -o $(TEST_LIB_DIR)/multiplematching.$(SOEXT) $(TEST_LIB_DIR)/multiplematching.o
 
-	$(AS) -o $(TEST_LIB_DIR)/twiceatzero.o test/native/libs/twiceatzero.s
+	$(CC) -E -x assembler-with-cpp -DRET_INSN=$(RET_INSN) test/native/libs/twiceatzero.s | $(AS) -o $(TEST_LIB_DIR)/twiceatzero.o -
 	$(LD) -shared -o $(TEST_LIB_DIR)/libtwiceatzero.$(SOEXT) $(TEST_LIB_DIR)/twiceatzero.o --section-start=.seg1=0x4000 -z max-page-size=0x1000
 endif
 	@touch $@

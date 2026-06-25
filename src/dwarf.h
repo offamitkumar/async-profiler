@@ -52,6 +52,20 @@ const int EMPTY_FRAME_SIZE = 0;
 const int LINKED_FRAME_SIZE = 0;
 const int INITIAL_PC_OFFSET = DW_LINK_REGISTER;
 
+#elif defined(__s390x__)
+
+#define DWARF_SUPPORTED true
+
+// s390x DWARF register numbers (System V ABI for s390x)
+// r0-r15 are DWARF regs 0-15; r11 = fp, r15 = sp, r14 = link/return address
+// DWARF register for PC: 16 (psw)
+const int DW_REG_FP = 11;   // r11 = frame pointer
+const int DW_REG_SP = 15;   // r15 = stack pointer
+const int DW_REG_PC = 14;   // r14 = return address (link register)
+const int EMPTY_FRAME_SIZE = 0;
+const int LINKED_FRAME_SIZE = 0;
+const int INITIAL_PC_OFFSET = DW_LINK_REGISTER;
+
 #else
 
 #define DWARF_SUPPORTED false

@@ -244,8 +244,24 @@ bool OS::isLinux() {
     return true;
 }
 
-// _CS_GNU_LIBC_VERSION is not defined on musl
-const static bool musl = confstr(_CS_GNU_LIBC_VERSION, NULL, 0) == 0 && errno != 0;
+// _CS_GNU_LIBC_VERSION is not defined on musl.
+// Avoid accessing errno in a static initializer: on s390x (and other archs)
+// TLS may not be fully set up when dlopen constructors run, causing
+// __errno_location() to return NULL. Use a helper function instead.
+static bool detectMusl() {
+    // confstr returns 0 and sets errno=EINVAL on musl (undefined CS name).
+    // On glibc it returns the string length (>0). Use a local errno via
+    // a direct libc call pattern that avoids the TLS errno macro.
+    if (confstr(_CS_GNU_LIBC_VERSION, NULL, 0) != 0) {
+        return false;  // glibc: confstr succeeded
+    }
+    // confstr returned 0: either musl (EINVAL) or empty string.
+    // Distinguish by checking if confstr with a buffer also returns 0.
+    char buf[64];
+    return confstr(_CS_GNU_LIBC_VERSION, buf, sizeof(buf)) == 0;
+}
+
+const static bool musl = detectMusl();
 
 bool OS::isMusl() {
     return musl;
@@ -323,7 +339,21 @@ bool OS::sendSignalToThread(int thread_id, int signo) {
 void* OS::safeAlloc(size_t size) {
     // Naked syscall can be used inside a signal handler.
     // Also, we don't want to catch our own calls when profiling mmap.
+    // On s390x, the mmap syscall (90) uses the old interface: r2 points to a
+    // struct of 6 long arguments on the stack. Avoid glibc's syscall() wrapper
+    // which calls __errno_location() on failure — a TLS access that can fault
+    // during static initializers when TLS is not yet set up.
+#if defined(__s390x__)
+    struct { unsigned long addr, len, prot, flags, fd, offset; } args = {
+        0, size, PROT_READ | PROT_WRITE, MAP_PRIVATE | MAP_ANONYMOUS, (unsigned long)-1, 0
+    };
+    register long r1 asm("1") = __NR_mmap;
+    register long r2 asm("2") = (long)&args;
+    asm volatile("svc 0" : "+r"(r2) : "r"(r1), "r"(r2) : "memory", "cc");
+    intptr_t result = r2;
+#else
     intptr_t result = syscall(MMAP_SYSCALL, NULL, size, PROT_READ | PROT_WRITE, MAP_PRIVATE | MAP_ANONYMOUS, -1, 0);
+#endif
     if (result < 0 && result > -4096) {
         return NULL;
     }
@@ -331,7 +361,16 @@ void* OS::safeAlloc(size_t size) {
 }
 
 void OS::safeFree(void* addr, size_t size) {
+    // On s390x avoid glibc's syscall() wrapper for the same TLS reason as safeAlloc.
+    // munmap uses individual registers (r2=addr, r3=len) — not the struct form.
+#if defined(__s390x__)
+    register long r1 asm("1") = __NR_munmap;
+    register long r2 asm("2") = (long)addr;
+    register long r3 asm("3") = (long)size;
+    asm volatile("svc 0" : "+r"(r2) : "r"(r1), "r"(r3) : "memory", "cc");
+#else
     syscall(__NR_munmap, addr, size);
+#endif
 }
 
 bool OS::getCpuDescription(char* buf, size_t size) {

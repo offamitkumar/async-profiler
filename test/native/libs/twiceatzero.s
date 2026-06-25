@@ -6,4 +6,4 @@
 .text
 .section .seg1, "ax"
 twiceatzero_hello:
-    ret
+    RET_INSN

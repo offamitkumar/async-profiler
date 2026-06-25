@@ -6,9 +6,9 @@
 .text
 .section .seg1, "ax"
 _ZN5Class8functionEv.cold:
-    ret
+    RET_INSN
 
 .text
 .section .seg1, "ax"
 _ZN5Class8functionEv:
-    ret
+    RET_INSN

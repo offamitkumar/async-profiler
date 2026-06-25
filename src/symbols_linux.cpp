@@ -154,6 +154,17 @@ struct SharedLibrary {
 
 #ifdef __LP64__
 const unsigned char ELFCLASS_SUPPORTED = ELFCLASS64;
+#else
+const unsigned char ELFCLASS_SUPPORTED = ELFCLASS32;
+#endif
+
+#if __BYTE_ORDER__ == __ORDER_BIG_ENDIAN__
+const unsigned char ELFDATA_SUPPORTED = ELFDATA2MSB;
+#else
+const unsigned char ELFDATA_SUPPORTED = ELFDATA2LSB;
+#endif
+
+#ifdef __LP64__
 typedef Elf64_Ehdr ElfHeader;
 typedef Elf64_Shdr ElfSection;
 typedef Elf64_Phdr ElfProgramHeader;
@@ -164,7 +175,6 @@ typedef Elf64_Dyn  ElfDyn;
 #define ELF_R_TYPE ELF64_R_TYPE
 #define ELF_R_SYM  ELF64_R_SYM
 #else
-const unsigned char ELFCLASS_SUPPORTED = ELFCLASS32;
 typedef Elf32_Ehdr ElfHeader;
 typedef Elf32_Shdr ElfSection;
 typedef Elf32_Phdr ElfProgramHeader;
@@ -201,6 +211,9 @@ typedef Elf32_Dyn  ElfDyn;
 // like the impossible relocation number.
 #  define R_GLOB_DAT -1
 #  define R_ABS64 -1
+#elif defined(__s390x__)
+#  define R_GLOB_DAT R_390_GLOB_DAT
+#  define R_ABS64 R_390_64
 #else
 #  error "Compiling on unsupported arch"
 #endif
@@ -230,7 +243,7 @@ class ElfParser {
     bool validHeader() {
         unsigned char* ident = _header->e_ident;
         return ident[0] == 0x7f && ident[1] == 'E' && ident[2] == 'L' && ident[3] == 'F'
-            && ident[4] == ELFCLASS_SUPPORTED && ident[5] == ELFDATA2LSB && ident[6] == EV_CURRENT
+            && ident[4] == ELFCLASS_SUPPORTED && ident[5] == ELFDATA_SUPPORTED && ident[6] == EV_CURRENT
             && _header->e_shstrndx != SHN_UNDEF;
     }
 

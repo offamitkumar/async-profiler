@@ -63,6 +63,22 @@ static bool cpuHasGoodTimestampCounter() {
     return true;
 }
 
+#elif defined(__s390x__)
+
+#define TSC_SUPPORTED true
+
+static inline u64 rdtsc() {
+    u64 value;
+    // STCKF - Store Clock Fast: stores a 64-bit TOD clock value
+    asm volatile("stckf %0" : "=Q"(value) : : "cc");
+    return value;
+}
+
+static bool cpuHasGoodTimestampCounter() {
+    // s390x TOD clock is always available and invariant
+    return true;
+}
+
 #else
 
 #define TSC_SUPPORTED false
